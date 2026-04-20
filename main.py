@@ -117,6 +117,58 @@ async def list_matches(ctx):
         msg += f"ID: {list(matches.keys())[list(matches.values()).index(m)]} - {', '.join(m['players'])}\n"
     await ctx.send(msg)
 
+@bot.command()
+async def leaderboard(ctx: commands.Context, page: int = 1):
+    players = load_json(PLAYERS_FILE)
+
+    sorted_p = sorted(players.items(), key=lambda x: x[1].get("elo", 0), reverse=True)
+
+    per_page = 10
+    total_pages = (len(sorted_p) + per_page - 1) // per_page
+
+    page = max(1, min(page, total_pages if total_pages > 0 else 1))
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_data = sorted_p[start_idx:end_idx]
+
+    emoji = "🔽"
+    msg = f"5v5 Leaderboard (Top {len(sorted_p)}) — Page {page}/{total_pages}:\n"
+
+    for i, (pid, p) in enumerate(page_data, start=start_idx + 1):
+        msg += f"{i}. {emoji} {p.get('nickname','?')} - {p.get('elo',0)} ELO\n"
+
+    class LeaderboardView(discord.ui.View):
+        def __init__(self, ctx_author, current_page, max_pages):
+            super().__init__(timeout=300)
+            self.ctx_author = ctx_author
+            self.current_page = current_page
+            self.max_pages = max_pages
+
+            self.prev_button.disabled = current_page <= 1
+            self.next_button.disabled = current_page >= max_pages
+
+        @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.blurple)
+        async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user.id != self.ctx_author:
+                await interaction.response.send_message("You can't use this button.", ephemeral=True)
+                return
+            await interaction.response.defer()
+            await interaction.message.delete()
+            await ctx.invoke(leaderboard, page=self.current_page - 1)
+
+        @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.blurple)
+        async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user.id != self.ctx_author:
+                await interaction.response.send_message("You can't use this button.", ephemeral=True)
+                return
+            await interaction.response.defer()
+            await interaction.message.delete()
+            await ctx.invoke(leaderboard, page=self.current_page + 1)
+
+    view = LeaderboardView(ctx.author.id, page, total_pages) if total_pages > 1 else None
+    await ctx.send(msg, view=view)
+
 if __name__ == "__main__":
     if not os.path.exists(BOT_TOKEN_FILE):
         print(f"Create {BOT_TOKEN_FILE} with your bot token!")
