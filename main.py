@@ -177,4 +177,4 @@ if __name__ == "__main__":
     with open(BOT_TOKEN_FILE, 'r') as f:
         token = f.read().strip()
     
-    bot.run(MTQ5NTg1ODA1MzI4MTQ4MDc1NA.GjWOnT.1dbi1bVc1CiC9JWA2Y8hZieS3YFXe0tjz9-L2U)
+    bot.run(token)
