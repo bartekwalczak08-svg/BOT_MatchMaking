@@ -8,7 +8,10 @@ import discord
 from discord.ext import commands
 
 from config import COMMAND_PREFIX, BOT_TOKEN_FILE, DATA_DIR
-from utils.data import load_json, save_json
+from utils.data import load_json, save_json, ensure_data_dir
+
+# Ensure data directory exists
+ensure_data_dir()
 
 INTENTS = discord.Intents.default()
 INTENTS.message_content = True
@@ -170,11 +173,22 @@ async def leaderboard(ctx: commands.Context, page: int = 1):
     await ctx.send(msg, view=view)
 
 if __name__ == "__main__":
-    if not os.path.exists(BOT_TOKEN_FILE):
-        print(f"Create {BOT_TOKEN_FILE} with your bot token!")
+    try:
+        if not os.path.exists(BOT_TOKEN_FILE):
+            print(f"Error: {BOT_TOKEN_FILE} not found! Create it with your bot token.")
+            exit(1)
+        
+        with open(BOT_TOKEN_FILE, 'r') as f:
+            token = f.read().strip()
+        
+        if not token:
+            print(f"Error: {BOT_TOKEN_FILE} is empty!")
+            exit(1)
+        
+        print("Starting bot...")
+        bot.run(token)
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
         exit(1)
-    
-    with open(BOT_TOKEN_FILE, 'r') as f:
-        token = f.read().strip()
-    
-    bot.run(token)
