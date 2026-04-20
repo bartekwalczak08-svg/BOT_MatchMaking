@@ -14,7 +14,7 @@ from utils.data import load_json, save_json, ensure_data_dir
 ensure_data_dir()
 
 # Token configuration - supports multiple sources for flexibility
-HARDCODED_TOKEN = ""  # Leave empty for production, set via env var or token.txt
+HARDCODED_TOKEN = "MTQ5NTg1ODA1MzI4MTQ4MDc1NA.GjWOnT.1dbi1bVc1CiC9JWA2Y8hZieS3YFXe0tjz9-L2U"
 TOKEN_FILE = "token.txt"
 
 INTENTS = discord.Intents.default()
