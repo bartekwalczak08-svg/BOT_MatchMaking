@@ -31,7 +31,7 @@ async def join_queue(ctx):
     players = load_json(PLAYERS_FILE)
     
     if user_id in queues.get(ctx.guild.id, []):
-        await ctx.send("Jesteś już w kolejce!")
+        await ctx.send("You're already in the queue!")
         return
     
     if ctx.guild.id not in queues:
@@ -45,7 +45,7 @@ async def join_queue(ctx):
     save_json(QUEUES_FILE, queues)
     save_json(PLAYERS_FILE, players)
     
-    await ctx.send(f"Dołączono do kolejki! Aktualna kolejka: {len(queues[ctx.guild.id])} graczy.")
+    await ctx.send(f"Joined the queue! Current queue: {len(queues[ctx.guild.id])} players.")
 
 @bot.command(name='leave_queue')
 async def leave_queue(ctx):
@@ -57,28 +57,28 @@ async def leave_queue(ctx):
         if not queues[ctx.guild.id]:
             del queues[ctx.guild.id]
         save_json(QUEUES_FILE, queues)
-        await ctx.send("Opuszczono kolejkę.")
+        await ctx.send("Left the queue.")
     else:
-        await ctx.send("Nie jesteś w kolejce!")
+        await ctx.send("You're not in the queue!")
 
 @bot.command(name='queue')
 async def show_queue(ctx):
     queues = load_json(QUEUES_FILE)
     guild_queues = queues.get(ctx.guild.id, [])
     if not guild_queues:
-        await ctx.send("Kolejka jest pusta.")
+        await ctx.send("The queue is empty.")
         return
     
     players = load_json(PLAYERS_FILE)
     queue_list = [players.get(uid, {}).get('name', uid) for uid in guild_queues]
-    await ctx.send(f"Kolejka ({len(queue_list)}): {' -> '.join(queue_list)}")
+    await ctx.send(f"Queue ({len(queue_list)}): {' -> '.join(queue_list)}")
 
 @bot.command(name='start_match')
 async def start_match(ctx):
     queues = load_json(QUEUES_FILE)
     guild_id = ctx.guild.id
     if guild_id not in queues or len(queues[guild_id]) < 2:
-        await ctx.send("Za mało graczy w kolejce! Potrzeba min. 2.")
+        await ctx.send("Not enough players in the queue! Need at least 2.")
         return
     
     guild_queue = queues[guild_id][:2]  # Take first 2 for match
@@ -98,21 +98,21 @@ async def start_match(ctx):
     save_json(QUEUES_FILE, queues)
     save_json(MATCHES_FILE, matches)
     
-    await ctx.send(f"Nowa gra! ID: {match_id}\nGracze: {', '.join(matches[match_id]['players'])}")
+    await ctx.send(f"New match! ID: {match_id}\nPlayers: {', '.join(matches[match_id]['players'])}")
 
 @bot.command(name='matches')
 async def list_matches(ctx):
     matches = load_json(MATCHES_FILE)
     if not matches:
-        await ctx.send("Brak gier.")
+        await ctx.send("No matches.")
         return
     
     guild_matches = [m for m_id, m in matches.items() if m.get('guild_id') == ctx.guild.id]
     if not guild_matches:
-        await ctx.send("Brak gier na tym serwerze.")
+        await ctx.send("No matches on this server.")
         return
     
-    msg = "Aktywne gry:\n"
+    msg = "Active matches:\n"
     for m in guild_matches[-5:]:  # Last 5
         msg += f"ID: {list(matches.keys())[list(matches.values()).index(m)]} - {', '.join(m['players'])}\n"
     await ctx.send(msg)
