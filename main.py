@@ -174,21 +174,37 @@ async def leaderboard(ctx: commands.Context, page: int = 1):
 
 if __name__ == "__main__":
     try:
+        print("[BOT] Initializing bot...")
+        print(f"[BOT] Token file: {BOT_TOKEN_FILE}")
+        print(f"[BOT] Data directory: {DATA_DIR}")
+        
+        # Check token file
         if not os.path.exists(BOT_TOKEN_FILE):
-            print(f"Error: {BOT_TOKEN_FILE} not found! Create it with your bot token.")
+            print(f"[ERROR] {BOT_TOKEN_FILE} not found!")
+            print(f"[ERROR] Current directory: {os.getcwd()}")
+            print(f"[ERROR] Files in current directory: {os.listdir('.')}")
             exit(1)
         
+        # Read and validate token
         with open(BOT_TOKEN_FILE, 'r') as f:
             token = f.read().strip()
         
         if not token:
-            print(f"Error: {BOT_TOKEN_FILE} is empty!")
+            print(f"[ERROR] {BOT_TOKEN_FILE} is empty!")
             exit(1)
         
-        print("Starting bot...")
+        print(f"[BOT] Token loaded successfully")
+        print(f"[BOT] Bot will use prefix: {COMMAND_PREFIX}")
+        print("[BOT] Starting bot...")
         bot.run(token)
+        
+    except ImportError as e:
+        print(f"[ERROR] Import error: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
     except Exception as e:
-        print(f"Fatal error: {e}")
+        print(f"[ERROR] Fatal error: {e}")
         import traceback
         traceback.print_exc()
         exit(1)
