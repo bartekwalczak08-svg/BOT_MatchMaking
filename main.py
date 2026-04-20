@@ -13,6 +13,10 @@ from utils.data import load_json, save_json, ensure_data_dir
 # Ensure data directory exists
 ensure_data_dir()
 
+# Token configuration - supports multiple sources for flexibility
+HARDCODED_TOKEN = ""  # Leave empty for production, set via env var or token.txt
+TOKEN_FILE = "token.txt"
+
 INTENTS = discord.Intents.default()
 INTENTS.message_content = True
 INTENTS.members = True
@@ -172,37 +176,46 @@ async def leaderboard(ctx: commands.Context, page: int = 1):
     view = LeaderboardView(ctx.author.id, page, total_pages) if total_pages > 1 else None
     await ctx.send(msg, view=view)
 
+def ensure_files():
+    """Ensure required directories and files exist."""
+    ensure_data_dir()
+    # Additional file checks can be added here
+
+
 if __name__ == "__main__":
     try:
+        ensure_files()
+        
         print("[BOT] Initializing bot...")
-        print(f"[BOT] Token file: {BOT_TOKEN_FILE}")
         print(f"[BOT] Data directory: {DATA_DIR}")
+        print(f"[BOT] Bot prefix: {COMMAND_PREFIX}")
         
-        # Check token file
-        if not os.path.exists(BOT_TOKEN_FILE):
-            print(f"[ERROR] {BOT_TOKEN_FILE} not found!")
-            print(f"[ERROR] Current directory: {os.getcwd()}")
-            print(f"[ERROR] Files in current directory: {os.listdir('.')}")
-            exit(1)
+        # Token resolution order: HARDCODED_TOKEN -> env DISCORD_TOKEN -> token.txt
+        token = HARDCODED_TOKEN or os.environ.get("DISCORD_TOKEN")
         
-        # Read and validate token
-        with open(BOT_TOKEN_FILE, 'r') as f:
-            token = f.read().strip()
-        
+        if not token and os.path.exists(TOKEN_FILE):
+            try:
+                with open(TOKEN_FILE, "r", encoding="utf-8") as tf:
+                    token = tf.read().strip()
+                print(f"[BOT] Token loaded from {TOKEN_FILE}")
+            except Exception as e:
+                print(f"[ERROR] Failed to read {TOKEN_FILE}: {e}")
+                token = None
+        elif token:
+            print("[BOT] Token loaded from environment/config")
+
         if not token:
-            print(f"[ERROR] {BOT_TOKEN_FILE} is empty!")
+            print("[ERROR] Missing DISCORD_TOKEN!")
+            print("[ERROR] Please provide token via one of these methods:")
+            print("  1. Set HARDCODED_TOKEN in main.py (not recommended)")
+            print("  2. Set DISCORD_TOKEN environment variable")
+            print("  3. Create token.txt with your bot token")
             exit(1)
-        
-        print(f"[BOT] Token loaded successfully")
-        print(f"[BOT] Bot will use prefix: {COMMAND_PREFIX}")
-        print("[BOT] Starting bot...")
-        bot.run(token)
-        
-    except ImportError as e:
-        print(f"[ERROR] Import error: {e}")
-        import traceback
-        traceback.print_exc()
-        exit(1)
+        else:
+            print("[BOT] Token validated successfully")
+            print("[BOT] Starting bot...")
+            bot.run(token)
+            
     except Exception as e:
         print(f"[ERROR] Fatal error: {e}")
         import traceback

@@ -8,11 +8,26 @@ Ensure your Pterodactyl server is configured with:
 
 ## Setup Steps
 
-### 1. Upload Bot Token
-Before starting the server:
-1. Create a file `token.txt` with your Discord bot token
-2. Upload it to the Pterodactyl file manager (root directory)
-3. Do NOT commit this file to git (it's in `.gitignore`)
+### 1. Provide Bot Token (3 Methods - Choose One)
+
+The bot supports three methods to load your bot token in this priority order:
+
+#### Method 1: Environment Variable (Recommended for Pterodactyl)
+1. In Pterodactyl panel, go to **Startup** settings
+2. Add environment variable: `DISCORD_TOKEN=your_bot_token_here`
+3. Save and restart
+
+#### Method 2: Token File (for Local Testing)
+1. Create file `token.txt` with your Discord bot token
+2. Upload to Pterodactyl file manager (root directory)
+3. Or place in local directory for testing
+
+#### Method 3: Hardcoded (Not Recommended - Security Risk)
+Edit `main.py` line 17:
+```python
+HARDCODED_TOKEN = "your_bot_token_here"
+```
+⚠️ **Warning**: This exposes your token in the repository!
 
 ### 2. Verify File Structure
 The server should have:
