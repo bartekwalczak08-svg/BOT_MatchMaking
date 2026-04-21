@@ -6,14 +6,14 @@ from datetime import datetime
 
 import discord
 from discord.ext import commands
+from discord import app_commands
 
-from config import COMMAND_PREFIX, BOT_TOKEN_FILE, DATA_DIR
+from config import COMMAND_PREFIX, DATA_DIR
 from data_utils import load_json, save_json, ensure_data_dir
 
 # Ensure data directory exists
 ensure_data_dir()
 
-# Token configuration
 TOKEN_FILE = "token.txt"
 
 INTENTS = discord.Intents.default()
@@ -26,197 +26,217 @@ MATCHES_FILE = "matches.json"
 
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=INTENTS)
 
+
 @bot.event
 async def on_ready():
     print(f'{bot.user} has logged in!')
+    try:
+        synced = await bot.tree.sync()
+        print(f"[BOT] Synced {len(synced)} commands")
+    except Exception as e:
+        print(f"[ERROR] Failed to sync commands: {e}")
 
-@bot.command(name='join_queue')
-async def join_queue(ctx):
-    user_id = str(ctx.author.id)
+
+# ===================== QUEUE =====================
+
+@bot.tree.command(name='join_queue', description='Dołącz do kolejki na grę')
+async def join_queue(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    guild_id = str(interaction.guild.id)
+
     queues = load_json(QUEUES_FILE)
     players = load_json(PLAYERS_FILE)
-    
-    if user_id in queues.get(ctx.guild.id, []):
-        await ctx.send("You're already in the queue!")
+
+    if user_id in queues.get(guild_id, []):
+        await interaction.response.send_message("Już jesteś w kolejce!")
         return
-    
-    if ctx.guild.id not in queues:
-        queues[ctx.guild.id] = []
-    
-    queues[ctx.guild.id].append(user_id)
-    players[user_id] = players.get(user_id, {})
-    players[user_id]['name'] = str(ctx.author)
+
+    queues.setdefault(guild_id, []).append(user_id)
+
+    players.setdefault(user_id, {})
+    players[user_id]['nickname'] = str(interaction.user)
+    players[user_id].setdefault('elo', 1000)
     players[user_id]['joined_at'] = datetime.now().isoformat()
-    
+
     save_json(QUEUES_FILE, queues)
     save_json(PLAYERS_FILE, players)
-    
-    await ctx.send(f"Joined the queue! Current queue: {len(queues[ctx.guild.id])} players.")
 
-@bot.command(name='leave_queue')
-async def leave_queue(ctx):
-    user_id = str(ctx.author.id)
+    await interaction.response.send_message(f"Dołączyłeś do kolejki! ({len(queues[guild_id])} graczy)")
+
+
+@bot.tree.command(name='leave_queue', description='Opuść kolejkę')
+async def leave_queue(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    guild_id = str(interaction.guild.id)
+
     queues = load_json(QUEUES_FILE)
-    
-    if ctx.guild.id in queues and user_id in queues[ctx.guild.id]:
-        queues[ctx.guild.id].remove(user_id)
-        if not queues[ctx.guild.id]:
-            del queues[ctx.guild.id]
+
+    if guild_id in queues and user_id in queues[guild_id]:
+        queues[guild_id].remove(user_id)
+
+        if not queues[guild_id]:
+            del queues[guild_id]
+
         save_json(QUEUES_FILE, queues)
-        await ctx.send("Left the queue.")
+        await interaction.response.send_message("Wyszedłeś z kolejki.")
     else:
-        await ctx.send("You're not in the queue!")
+        await interaction.response.send_message("Nie jesteś w kolejce.")
 
-@bot.command(name='queue')
-async def show_queue(ctx):
+
+@bot.tree.command(name='queue', description='Pokaż aktualną kolejkę')
+async def show_queue(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+
     queues = load_json(QUEUES_FILE)
-    guild_queues = queues.get(ctx.guild.id, [])
-    if not guild_queues:
-        await ctx.send("The queue is empty.")
-        return
-    
     players = load_json(PLAYERS_FILE)
-    queue_list = [players.get(uid, {}).get('name', uid) for uid in guild_queues]
-    await ctx.send(f"Queue ({len(queue_list)}): {' -> '.join(queue_list)}")
 
-@bot.command(name='start_match')
-async def start_match(ctx):
-    queues = load_json(QUEUES_FILE)
-    guild_id = ctx.guild.id
-    if guild_id not in queues or len(queues[guild_id]) < 2:
-        await ctx.send("Not enough players in the queue! Need at least 2.")
+    guild_queue = queues.get(guild_id, [])
+
+    if not guild_queue:
+        await interaction.response.send_message("Kolejka jest pusta.")
         return
-    
-    guild_queue = queues[guild_id][:2]  # Take first 2 for match
-    queues[guild_id] = queues[guild_id][2:]  # Remove them
+
+    msg = "**Kolejka:**\n"
+    for i, uid in enumerate(guild_queue, 1):
+        name = players.get(uid, {}).get('nickname', uid)
+        msg += f"{i}. {name}\n"
+
+    await interaction.response.send_message(msg)
+
+
+# ===================== MATCHES =====================
+
+@bot.tree.command(name='start_match', description='Utwórz nowy mecz')
+async def start_match(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+
+    queues = load_json(QUEUES_FILE)
+    players = load_json(PLAYERS_FILE)
+    matches = load_json(MATCHES_FILE)
+
+    if guild_id not in queues or len(queues[guild_id]) < 2:
+        await interaction.response.send_message("Za mało graczy (min. 2).")
+        return
+
+    selected = queues[guild_id][:2]
+    queues[guild_id] = queues[guild_id][2:]
+
     if not queues[guild_id]:
         del queues[guild_id]
-    
-    players = load_json(PLAYERS_FILE)
+
     match_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-    matches = load_json(MATCHES_FILE)
+
     matches[match_id] = {
         'guild_id': guild_id,
-        'players': [players.get(p, {}).get('name', p) for p in guild_queue],
+        'players': selected,
         'started_at': datetime.now().isoformat()
     }
-    
+
     save_json(QUEUES_FILE, queues)
     save_json(MATCHES_FILE, matches)
-    
-    await ctx.send(f"New match! ID: {match_id}\nPlayers: {', '.join(matches[match_id]['players'])}")
 
-@bot.command(name='matches')
-async def list_matches(ctx):
+    names = [players.get(p, {}).get('nickname', p) for p in selected]
+
+    await interaction.response.send_message(f"🔥 Mecz start!\nID: {match_id}\nGracze: {', '.join(names)}")
+
+
+@bot.tree.command(name='matches', description='Pokaż aktywne mecze')
+async def list_matches(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+
     matches = load_json(MATCHES_FILE)
-    if not matches:
-        await ctx.send("No matches.")
-        return
-    
-    guild_matches = [m for m_id, m in matches.items() if m.get('guild_id') == ctx.guild.id]
-    if not guild_matches:
-        await ctx.send("No matches on this server.")
-        return
-    
-    msg = "Active matches:\n"
-    for m in guild_matches[-5:]:  # Last 5
-        msg += f"ID: {list(matches.keys())[list(matches.values()).index(m)]} - {', '.join(m['players'])}\n"
-    await ctx.send(msg)
-
-@bot.command()
-async def leaderboard(ctx: commands.Context, page: int = 1):
     players = load_json(PLAYERS_FILE)
 
-    sorted_p = sorted(players.items(), key=lambda x: x[1].get("elo", 0), reverse=True)
+    guild_matches = [(m_id, m) for m_id, m in matches.items() if m.get('guild_id') == guild_id]
+
+    if not guild_matches:
+        await interaction.response.send_message("Brak meczów.")
+        return
+
+    msg = "**Aktywne mecze:**\n"
+
+    for m_id, m in guild_matches[-5:]:
+        names = [players.get(p, {}).get('nickname', p) for p in m['players']]
+        msg += f"ID: {m_id} - {', '.join(names)}\n"
+
+    await interaction.response.send_message(msg)
+
+
+# ===================== LEADERBOARD =====================
+
+@bot.tree.command(name='leaderboard', description='Pokaż ranking graczy')
+async def leaderboard(interaction: discord.Interaction, page: int = 1):
+    players = load_json(PLAYERS_FILE)
+
+    sorted_p = sorted(players.items(), key=lambda x: x[1].get("elo", 1000), reverse=True)
 
     per_page = 10
-    total_pages = (len(sorted_p) + per_page - 1) // per_page
+    total_pages = max(1, (len(sorted_p) + per_page - 1) // per_page)
 
-    page = max(1, min(page, total_pages if total_pages > 0 else 1))
+    page = max(1, min(page, total_pages))
 
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    page_data = sorted_p[start_idx:end_idx]
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_data = sorted_p[start:end]
 
-    emoji = "🔽"
-    msg = f"5v5 Leaderboard (Top {len(sorted_p)}) — Page {page}/{total_pages}:\n"
+    msg = f"🏆 Leaderboard — strona {page}/{total_pages}\n\n"
 
-    for i, (pid, p) in enumerate(page_data, start=start_idx + 1):
-        msg += f"{i}. {emoji} {p.get('nickname','?')} - {p.get('elo',0)} ELO\n"
+    for i, (pid, p) in enumerate(page_data, start=start + 1):
+        name = p.get('nickname', pid)
+        elo = p.get('elo', 1000)
+        msg += f"{i}. {name} — {elo} ELO\n"
 
-    class LeaderboardView(discord.ui.View):
-        def __init__(self, ctx_author, current_page, max_pages):
-            super().__init__(timeout=300)
-            self.ctx_author = ctx_author
-            self.current_page = current_page
-            self.max_pages = max_pages
+    class LBView(discord.ui.View):
+        def __init__(self, user_id):
+            super().__init__(timeout=120)
+            self.user_id = user_id
 
-            self.prev_button.disabled = current_page <= 1
-            self.next_button.disabled = current_page >= max_pages
-
-        @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.blurple)
-        async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user.id != self.ctx_author:
-                await interaction.response.send_message("You can't use this button.", ephemeral=True)
+        @discord.ui.button(label="◀", style=discord.ButtonStyle.blurple)
+        async def prev(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+            if button_interaction.user.id != self.user_id:
+                await button_interaction.response.send_message("Nie twoje.", ephemeral=True)
                 return
-            await interaction.response.defer()
-            await interaction.message.delete()
-            await ctx.invoke(leaderboard, page=self.current_page - 1)
+            await button_interaction.response.defer()
+            await button_interaction.message.delete()
+            await leaderboard(button_interaction, page - 1)
 
-        @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.blurple)
-        async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user.id != self.ctx_author:
-                await interaction.response.send_message("You can't use this button.", ephemeral=True)
+        @discord.ui.button(label="▶", style=discord.ButtonStyle.blurple)
+        async def next(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+            if button_interaction.user.id != self.user_id:
+                await button_interaction.response.send_message("Nie twoje.", ephemeral=True)
                 return
-            await interaction.response.defer()
-            await interaction.message.delete()
-            await ctx.invoke(leaderboard, page=self.current_page + 1)
+            await button_interaction.response.defer()
+            await button_interaction.message.delete()
+            await leaderboard(button_interaction, page + 1)
 
-    view = LeaderboardView(ctx.author.id, page, total_pages) if total_pages > 1 else None
-    await ctx.send(msg, view=view)
+    view = LBView(interaction.user.id) if total_pages > 1 else None
+    await interaction.response.send_message(msg, view=view)
 
-def ensure_files():
-    """Ensure required directories and files exist."""
-    ensure_data_dir()
-    # Additional file checks can be added here
+
+# ===================== START =====================
+
+def get_token():
+    token = os.environ.get("DISCORD_TOKEN")
+
+    if token:
+        print("[BOT] Token z env")
+        return token
+
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+            print("[BOT] Token z pliku")
+            return f.read().strip()
+
+    return None
 
 
 if __name__ == "__main__":
-    try:
-        ensure_files()
-        
-        print("[BOT] Initializing bot...")
-        print(f"[BOT] Data directory: {DATA_DIR}")
-        print(f"[BOT] Bot prefix: {COMMAND_PREFIX}")
-        
-        # Token resolution order: env DISCORD_TOKEN -> token.txt
-        token = os.environ.get("DISCORD_TOKEN")
-        
-        if not token and os.path.exists(TOKEN_FILE):
-            try:
-                with open(TOKEN_FILE, "r", encoding="utf-8") as tf:
-                    token = tf.read().strip()
-                print(f"[BOT] Token loaded from {TOKEN_FILE}")
-            except Exception as e:
-                print(f"[ERROR] Failed to read {TOKEN_FILE}: {e}")
-                token = None
-        elif token:
-            print("[BOT] Token loaded from environment/config")
+    print("[BOT] Start...")
 
-        if not token:
-            print("[ERROR] Missing DISCORD_TOKEN!")
-            print("[ERROR] Please provide token via one of these methods:")
-            print("  1. Set HARDCODED_TOKEN in main.py (not recommended)")
-            print("  2. Set DISCORD_TOKEN environment variable")
-            print("  3. Create token.txt with your bot token")
-            exit(1)
-        else:
-            print("[BOT] Token validated successfully")
-            print("[BOT] Starting bot...")
-            bot.run(token)
-            
-    except Exception as e:
-        print(f"[ERROR] Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
+    token = get_token()
+
+    if not token:
+        print("[ERROR] Brak tokena")
         exit(1)
+
+    bot.run(token)
