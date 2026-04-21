@@ -3,6 +3,10 @@ import os
 import random
 import string
 from datetime import datetime
+import sys
+
+# Ensure utils folder is in path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import discord
 from discord.ext import commands
