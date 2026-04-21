@@ -13,8 +13,7 @@ from utils.data import load_json, save_json, ensure_data_dir
 # Ensure data directory exists
 ensure_data_dir()
 
-# Token configuration - supports multiple sources for flexibility
-HARDCODED_TOKEN = "MTQ5NTg1ODA1MzI4MTQ4MDc1NA.GjWOnT.1dbi1bVc1CiC9JWA2Y8hZieS3YFXe0tjz9-L2U"
+# Token configuration
 TOKEN_FILE = "token.txt"
 
 INTENTS = discord.Intents.default()
@@ -190,8 +189,8 @@ if __name__ == "__main__":
         print(f"[BOT] Data directory: {DATA_DIR}")
         print(f"[BOT] Bot prefix: {COMMAND_PREFIX}")
         
-        # Token resolution order: HARDCODED_TOKEN -> env DISCORD_TOKEN -> token.txt
-        token = HARDCODED_TOKEN or os.environ.get("DISCORD_TOKEN")
+        # Token resolution order: env DISCORD_TOKEN -> token.txt
+        token = os.environ.get("DISCORD_TOKEN")
         
         if not token and os.path.exists(TOKEN_FILE):
             try:
