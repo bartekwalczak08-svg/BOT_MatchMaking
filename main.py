@@ -30,11 +30,13 @@ bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=INTENTS)
 @bot.event
 async def on_ready():
     print(f'{bot.user} has logged in!')
+
     try:
+        # global sync slash commands
         synced = await bot.tree.sync()
-        print(f"[BOT] Synced {len(synced)} commands")
+        print(f"[BOT] Synced {len(synced)} slash commands")
     except Exception as e:
-        print(f"[ERROR] Failed to sync commands: {e}")
+        print(f"[ERROR] Sync failed: {e}")
 
 
 # ===================== QUEUE =====================
