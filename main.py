@@ -215,6 +215,187 @@ async def leaderboard(interaction: discord.Interaction, page: int = 1):
     await interaction.response.send_message(msg, view=view)
 
 
+# ===================== PROFILE =====================
+
+def get_player_stats(player_id: str, guild_id: str):
+    """Calculate player stats from matches"""
+    players = load_json(PLAYERS_FILE)
+    matches = load_json(MATCHES_FILE)
+    
+    player_data = players.get(player_id, {})
+    
+    # Initialize stats if not present
+    if 'wins' not in player_data:
+        player_data['wins'] = 0
+    if 'losses' not in player_data:
+        player_data['losses'] = 0
+    if 'mvps' not in player_data:
+        player_data['mvps'] = 0
+    
+    elo = player_data.get('elo', 1000)
+    wins = player_data.get('wins', 0)
+    losses = player_data.get('losses', 0)
+    mvps = player_data.get('mvps', 0)
+    
+    total_games = wins + losses
+    winrate = (wins / total_games * 100) if total_games > 0 else 0
+    
+    # Get last 5 games
+    guild_matches = [
+        (m_id, m) for m_id, m in matches.items() 
+        if m.get('guild_id') == guild_id and player_id in m.get('players', [])
+    ]
+    guild_matches.sort(key=lambda x: x[1].get('started_at', ''), reverse=True)
+    last_games = guild_matches[:5]
+    
+    return {
+        'elo': elo,
+        'wins': wins,
+        'losses': losses,
+        'mvps': mvps,
+        'winrate': winrate,
+        'total_games': total_games,
+        'last_games': last_games,
+        'nickname': player_data.get('nickname', player_id)
+    }
+
+
+@bot.tree.command(name='profile', description='Sprawdź swój profil')
+async def profile(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    guild_id = str(interaction.guild.id)
+    
+    players = load_json(PLAYERS_FILE)
+    
+    if user_id not in players:
+        await interaction.response.send_message("Nie masz profilu. Dołącz do kolejki (`/join_queue`)!")
+        return
+    
+    stats = get_player_stats(user_id, guild_id)
+    
+    # Create embed
+    embed = discord.Embed(
+        title=f"🏆 Profile: {stats['nickname']}",
+        color=discord.Color.gold()
+    )
+    
+    embed.add_field(
+        name=f"⭐ ELO ({stats['elo']})",
+        value="",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="✅ Wins",
+        value=str(stats['wins']),
+        inline=True
+    )
+    embed.add_field(
+        name="❌ Losses",
+        value=str(stats['losses']),
+        inline=True
+    )
+    
+    embed.add_field(
+        name="📊 Winrate",
+        value=f"{stats['winrate']:.1f}%",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🌟 MVPs",
+        value=str(stats['mvps']),
+        inline=True
+    )
+    
+    # Last 5 games
+    if stats['last_games']:
+        last_games_text = ""
+        for match_id, match_data in stats['last_games']:
+            last_games_text += f"`#{match_id}` ({match_data.get('started_at', 'N/A').split('T')[0]})\n"
+        embed.add_field(
+            name="📅 Last 5 Games",
+            value=last_games_text if last_games_text else "Brak gier",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="📅 Last 5 Games",
+            value="Brak gier",
+            inline=False
+        )
+    
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name='player_profile', description='Sprawdź profil gracza')
+async def player_profile(interaction: discord.Interaction, user: discord.User):
+    player_id = str(user.id)
+    guild_id = str(interaction.guild.id)
+    
+    players = load_json(PLAYERS_FILE)
+    
+    if player_id not in players:
+        await interaction.response.send_message(f"Gracz {user.mention} nie ma profilu.")
+        return
+    
+    stats = get_player_stats(player_id, guild_id)
+    
+    # Create embed
+    embed = discord.Embed(
+        title=f"🏆 Profile: {stats['nickname']}",
+        color=discord.Color.gold()
+    )
+    
+    embed.add_field(
+        name=f"⭐ ELO ({stats['elo']})",
+        value="",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="✅ Wins",
+        value=str(stats['wins']),
+        inline=True
+    )
+    embed.add_field(
+        name="❌ Losses",
+        value=str(stats['losses']),
+        inline=True
+    )
+    
+    embed.add_field(
+        name="📊 Winrate",
+        value=f"{stats['winrate']:.1f}%",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🌟 MVPs",
+        value=str(stats['mvps']),
+        inline=True
+    )
+    
+    # Last 5 games
+    if stats['last_games']:
+        last_games_text = ""
+        for match_id, match_data in stats['last_games']:
+            last_games_text += f"`#{match_id}` ({match_data.get('started_at', 'N/A').split('T')[0]})\n"
+        embed.add_field(
+            name="📅 Last 5 Games",
+            value=last_games_text if last_games_text else "Brak gier",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="📅 Last 5 Games",
+            value="Brak gier",
+            inline=False
+        )
+    
+    await interaction.response.send_message(embed=embed)
+
+
 # ===================== START =====================
 
 def get_token():
