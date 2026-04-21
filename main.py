@@ -3,16 +3,12 @@ import os
 import random
 import string
 from datetime import datetime
-import sys
-
-# Ensure utils folder is in path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import discord
 from discord.ext import commands
 
 from config import COMMAND_PREFIX, BOT_TOKEN_FILE, DATA_DIR
-from utils.data import load_json, save_json, ensure_data_dir
+from data_utils import load_json, save_json, ensure_data_dir
 
 # Ensure data directory exists
 ensure_data_dir()
